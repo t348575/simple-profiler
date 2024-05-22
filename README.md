@@ -1,4 +1,4 @@
-# Simple header-only profiler wrapper over the [perfetto](https://perfetto.dev/) SDK ![Visits](https://nkvnu62257.execute-api.ap-south-1.amazonaws.com/production?repo=simple-profiler)
+# Simple header-only profiler wrapper over the [perfetto](https://perfetto.dev/) SDK ![Visits](https://lambda.348575.xyz/repo-view-counter?repo=simple-profiler)
 
 Check [src/main.cc](src/main.cc) for an example usage
 
