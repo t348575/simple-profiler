@@ -1,6 +1,8 @@
+import atexit
 import functools
 import json
 import os
+import signal
 import threading
 import time
 from contextlib import contextmanager
@@ -20,7 +22,16 @@ class Profiler:
                     cls._instance._events_lock = threading.Lock()
                     cls._instance._filepath = None
                     cls._instance._start_ts = None
+                    cls._instance._prev_sigint = None
+                    atexit.register(cls._instance.end_session)
         return cls._instance
+
+    def _sigint_handler(self, sig, frame):
+        self.end_session()
+        if callable(self._prev_sigint):
+            self._prev_sigint(sig, frame)
+        else:
+            raise KeyboardInterrupt
 
     def begin_session(self, filepath="results.json"):
         if self._active:
@@ -29,11 +40,15 @@ class Profiler:
         self._filepath = filepath
         self._events = []
         self._start_ts = time.perf_counter_ns()
+        self._prev_sigint = signal.signal(signal.SIGINT, self._sigint_handler)
 
     def end_session(self):
         if not self._active:
             return
         self._active = False
+        if self._prev_sigint is not None:
+            signal.signal(signal.SIGINT, self._prev_sigint)
+            self._prev_sigint = None
         trace = {"traceEvents": self._events}
         with open(self._filepath, "w") as f:
             json.dump(trace, f)
