@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Trace Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-primary: #353535;
+    --bg-secondary: #3c3c3c;
+    --bg-tertiary: #383838;
+    --bg-panel: #3e3e3e;
+    --border: #525252;
+    --text-primary: #e8e8e8;
+    --text-secondary: #909090;
+    --text-dim: #555558;
+    --accent: #58a6ff;
+    --label-width: 160px;
+    --ruler-height: 32px;
+    --minimap-height: 64px;
+    --header-height: 52px;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Roboto', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ---- Header ---- */
+  #header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    height: var(--header-height);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  #header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  #header .sep { flex: 1; }
+
+  #trace-info {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  #file-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+  #file-btn:hover { opacity: 0.85; }
+  #file-input { display: none; }
+
+  #reset-btn {
+    padding: 6px 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  #reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #reset-btn:disabled { opacity: 0.3; cursor: default; }
+
+  /* ---- Filter box ---- */
+  .filter-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .filter-input {
+    padding: 5px 28px 5px 10px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #filter-name, #filter-reqid { width: 180px; }
+  #filter-depth { width: 80px; }
+  .filter-input:focus { border-color: var(--accent); }
+  .filter-input::placeholder { color: var(--text-dim); }
+  .filter-input.active { border-color: #ffb300; color: #ffb300; }
+  .filter-clear {
+    position: absolute;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px;
+    display: none;
+  }
+  .filter-clear.visible { display: block; }
+  .filter-clear:hover { color: var(--text-primary); }
+
+  /* ---- Filter stats bar ---- */
+  #filter-stats {
+    flex-shrink: 0;
+    height: 0;
+    overflow: hidden;
+    background: #2a2a1e;
+    border-bottom: 1px solid #555530;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 20px;
+    font-size: 12px;
+    transition: height 0.15s;
+  }
+  #filter-stats.visible { height: 30px; }
+  .fs-label { color: #aaa870; }
+  .fs-val { color: #e8e070; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+  .fs-sep { color: #555530; }
+
+  /* ---- Main content area ---- */
+  #main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ---- Ruler row ---- */
+  #ruler-row {
+    display: flex;
+    flex-shrink: 0;
+    height: var(--ruler-height);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  #ruler-label-spacer {
+    width: var(--label-width);
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+
+  #ruler-canvas-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #ruler-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ---- Timeline row ---- */
+  #timeline-row {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ---- Thread labels ---- */
+  #thread-labels {
+    width: var(--label-width);
+    flex-shrink: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+    background: var(--bg-secondary);
+    position: relative;
+  }
+
+  #thread-labels-inner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .thread-label {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .thread-label span {
+    font-size: 12px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* ---- Timeline canvas ---- */
+  #canvas-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    cursor: crosshair;
+  }
+
+  #main-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ---- Minimap ---- */
+  #minimap-row {
+    display: flex;
+    flex-shrink: 0;
+    height: var(--minimap-height);
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border);
+  }
+
+  #minimap-label-spacer {
+    width: var(--label-width);
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #minimap-label-spacer span {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  #minimap-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  #minimap-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ---- Details panel ---- */
+  #details-panel {
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+    transition: height 0.2s ease;
+    height: 0;
+  }
+
+  #details-panel.open {
+    height: 140px;
+  }
+
+  #details-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 12px 16px;
+    height: 100%;
+    overflow-x: auto;
+  }
+
+  #details-close {
+    position: absolute;
+    right: 12px;
+    top: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+  }
+  #details-close:hover { color: var(--text-primary); }
+
+  #details-panel { position: relative; }
+
+  .detail-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+  }
+
+  .detail-group label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-dim);
+  }
+
+  .detail-group .val {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    word-break: break-all;
+  }
+
+  .detail-cat-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* ---- Tooltip ---- */
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: #1f1f22;
+    border: 1px solid #3a3a3e;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.7;
+    max-width: 320px;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+  }
+
+  #tooltip.visible { display: block; }
+
+  .tt-name {
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 4px;
+    word-break: break-all;
+    font-size: 13px;
+  }
+
+  .tt-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .tt-key { color: #8888aa; }
+  .tt-val { color: #e0e0f0; font-family: monospace; }
+
+  /* ---- Drop overlay ---- */
+  #drop-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(79, 195, 247, 0.08);
+    border: 3px dashed var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  #drop-overlay.active { opacity: 1; }
+
+  #drop-overlay span {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+
+  /* ---- Landing ---- */
+  #landing {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  #landing.hidden { display: none; }
+
+  #landing .icon {
+    font-size: 48px;
+    opacity: 0.3;
+  }
+
+  #landing p {
+    font-size: 16px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  #landing small {
+    font-size: 12px;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header id="header">
+    <h1>Trace Viewer</h1>
+    <span id="trace-info"></span>
+    <span class="sep"></span>
+    <div class="filter-wrap">
+      <input id="filter-name" class="filter-input" type="text" placeholder="Event name…" autocomplete="off" spellcheck="false">
+      <button id="filter-name-clear" class="filter-clear" title="Clear">&#215;</button>
+    </div>
+    <div class="filter-wrap">
+      <input id="filter-reqid" class="filter-input" type="text" placeholder="Request ID…" autocomplete="off" spellcheck="false">
+      <button id="filter-reqid-clear" class="filter-clear" title="Clear">&#215;</button>
+    </div>
+    <div class="filter-wrap">
+      <input id="filter-depth" class="filter-input" type="text" placeholder="Depth…" autocomplete="off" spellcheck="false">
+      <button id="filter-depth-clear" class="filter-clear" title="Clear">&#215;</button>
+    </div>
+    <button id="reset-btn" disabled>Reset Zoom</button>
+    <button id="file-btn">Open Trace</button>
+    <input type="file" id="file-input" accept=".json">
+  </header>
+
+  <div id="filter-stats">
+    <span class="fs-label">Filter</span>
+    <span id="fs-matches" class="fs-val"></span>
+    <span class="fs-sep">·</span>
+    <span class="fs-label">wall</span>
+    <span id="fs-wall" class="fs-val"></span>
+    <span class="fs-sep">·</span>
+    <span class="fs-label">sum</span>
+    <span id="fs-total" class="fs-val"></span>
+    <span class="fs-sep">·</span>
+    <span class="fs-label">avg</span>
+    <span id="fs-avg" class="fs-val"></span>
+    <span class="fs-sep">·</span>
+    <span class="fs-label">min</span>
+    <span id="fs-min" class="fs-val"></span>
+    <span class="fs-sep">·</span>
+    <span class="fs-label">max</span>
+    <span id="fs-max" class="fs-val"></span>
+  </div>
+
+  <div id="main">
+    <div id="ruler-row">
+      <div id="ruler-label-spacer"></div>
+      <div id="ruler-canvas-wrap">
+        <canvas id="ruler-canvas"></canvas>
+      </div>
+    </div>
+
+    <div id="timeline-row">
+      <div id="thread-labels">
+        <div id="thread-labels-inner"></div>
+      </div>
+      <div id="canvas-wrap">
+        <div id="landing">
+          <div class="icon">&#9654;</div>
+          <p>Open a trace JSON file to begin</p>
+          <small>Drag and drop or use the button above</small>
+        </div>
+        <canvas id="main-canvas"></canvas>
+      </div>
+    </div>
+
+    <div id="minimap-row">
+      <div id="minimap-label-spacer"><span>Overview</span></div>
+      <div id="minimap-wrap">
+        <canvas id="minimap-canvas"></canvas>
+      </div>
+    </div>
+
+    <div id="details-panel">
+      <button id="details-close">&#215;</button>
+      <div id="details-inner"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+<div id="drop-overlay"><span>Drop trace file here</span></div>
+
+<script>
+'use strict';
+
+// ============================================================
+// Constants & Config
+// ============================================================
+
+// Exact Perfetto MD_PALETTE_RAW colors (HSL → hex)
+// hsl(207,90%,54%) hsl(122,39%,49%) hsl(36,100%,50%) hsl(291,64%,42%) hsl(187,100%,42%)
+const CAT_COLORS = {
+  request:   '#2094f3',  // hsl(207,90%,54%) — Perfetto cyan-blue
+  model:     '#4cae4f',  // hsl(122,39%,49%) — Perfetto green
+  kv_offload:'#ff9900',  // hsl(36,100%,50%) — Perfetto orange
+  cuda:      '#b600d6',  // hsl(291,64%,42%) — Perfetto purple
+  default:   '#00bdd6',  // hsl(187,100%,42%) — Perfetto teal
+};
+
+const LANE_PADDING = 4;       // px between rows within a lane
+const ROW_HEIGHT   = 20;      // px per depth row
+const LANE_GAP     = 8;       // px gap between thread lanes
+const MIN_EVENT_W  = 1;       // minimum rendered width in px
+const LABEL_WIDTH  = 160;     // must match CSS --label-width
+const RULER_HEIGHT = 32;
+const MINIMAP_H    = 64;
+
+// ============================================================
+// State
+// ============================================================
+
+let traceData   = null;   // parsed & processed
+let viewState   = {
+  offsetUs:   0,          // left-edge time in us
+  scaleX:     1,          // px per microsecond
+};
+// Cached bounding rects — updated on resize to avoid forced layout in hot paths
+let canvasRect = { left: 0, top: 0 };
+let mmRect     = { left: 0, top: 0 };
+let hoveredEvent  = null;
+let selectedEvent = null;
+let filterName  = '';   // event name filter (lowercase)
+let filterReqId = '';   // req_id filter (lowercase)
+let filterDepth = null; // depth filter (integer or null)
+let isDragging    = false;
+let dragStartX    = 0;
+let dragStartOffset = 0;
+let minimapDragging = false;
+let minimapDragStartX = 0;
+let minimapDragStartOffset = 0;
+let animFrame     = null;
+let dirty         = true;
+let minimapDirty  = true;
+let minimapImageData = null;
+
+// ============================================================
+// DOM references
+// ============================================================
+
+const mainCanvas   = document.getElementById('main-canvas');
+const rulerCanvas  = document.getElementById('ruler-canvas');
+const minimapCanvas= document.getElementById('minimap-canvas');
+const canvasWrap   = document.getElementById('canvas-wrap');
+const rulerWrap    = document.getElementById('ruler-canvas-wrap');
+const mmWrap       = document.getElementById('minimap-wrap');
+const labelsInner  = document.getElementById('thread-labels-inner');
+const labelsContainer = document.getElementById('thread-labels');
+const tooltip      = document.getElementById('tooltip');
+const detailsPanel = document.getElementById('details-panel');
+const detailsInner = document.getElementById('details-inner');
+const traceInfo    = document.getElementById('trace-info');
+const landing      = document.getElementById('landing');
+const fileInput    = document.getElementById('file-input');
+const fileBtn      = document.getElementById('file-btn');
+const resetBtn     = document.getElementById('reset-btn');
+const dropOverlay  = document.getElementById('drop-overlay');
+const detailsClose = document.getElementById('details-close');
+const filterNameInput   = document.getElementById('filter-name');
+const filterNameClear   = document.getElementById('filter-name-clear');
+const filterReqInput    = document.getElementById('filter-reqid');
+const filterReqClear    = document.getElementById('filter-reqid-clear');
+const filterDepthInput  = document.getElementById('filter-depth');
+const filterDepthClear  = document.getElementById('filter-depth-clear');
+const filterStats      = document.getElementById('filter-stats');
+const fsMatches    = document.getElementById('fs-matches');
+const fsWall       = document.getElementById('fs-wall');
+const fsTotal      = document.getElementById('fs-total');
+const fsAvg        = document.getElementById('fs-avg');
+const fsMin        = document.getElementById('fs-min');
+const fsMax        = document.getElementById('fs-max');
+
+const mCtx = mainCanvas.getContext('2d');
+const rCtx = rulerCanvas.getContext('2d');
+const mmCtx= minimapCanvas.getContext('2d');
+
+// ============================================================
+// Data Processing
+// ============================================================
+
+function processTrace(raw) {
+  const events = raw.traceEvents || [];
+
+  const REQ_ID_RE = /\(id=([^)]+)\)/;
+
+  // Normalize all complete events
+  const normalized = [];
+  for (const e of events) {
+    if (e.ph !== 'X') continue;
+    normalized.push({
+      name:  e.name || '',
+      cat:   e.cat  || 'default',
+      ts:    e.ts,
+      dur:   e.dur,
+      end:   e.ts + e.dur,
+      args:  e.args || null,
+      tid:   String(e.tid),
+      depth: 0,
+    });
+  }
+
+  // Identify request events and extract their embedded ID
+  const reqMap = new Map(); // embedded req_id → request event
+  for (const e of normalized) {
+    const m = e.name.match(REQ_ID_RE);
+    if (m) {
+      e._reqId = m[1];
+      reqMap.set(m[1], e);
+    }
+  }
+
+  // Bucket events: request events vs children (have args.req_id) vs ungrouped
+  const reqBuckets = new Map(); // req_id → { reqEvt, children[] }
+  const ungrouped  = [];
+
+  for (const e of normalized) {
+    if (e._reqId) {
+      if (!reqBuckets.has(e._reqId)) reqBuckets.set(e._reqId, { reqEvt: null, children: [] });
+      reqBuckets.get(e._reqId).reqEvt = e;
+    } else if (e.args?.req_id && reqMap.has(e.args.req_id)) {
+      const pid = e.args.req_id;
+      e._parentReqId = pid;
+      if (!reqBuckets.has(pid)) reqBuckets.set(pid, { reqEvt: null, children: [] });
+      reqBuckets.get(pid).children.push(e);
+    } else {
+      ungrouped.push(e);
+    }
+  }
+
+  let globalMin = Infinity, globalMax = -Infinity;
+  const lanes = [];
+
+  function assignColors(evts) {
+    for (const e of evts) {
+      if (e.ts < globalMin) globalMin = e.ts;
+      if (e.end > globalMax) globalMax = e.end;
+      e.color     = CAT_COLORS[e.cat] || CAT_COLORS.default;
+      e.textColor = textColorForBg(e.color);
+    }
+  }
+
+  // Build one "package" per request: assign depths locally (req=0, children=1+),
+  // compute the overall time span and max depth used.
+  const packages = [];
+  for (const [reqId, { reqEvt, children }] of reqBuckets) {
+    if (!reqEvt) continue;
+    reqEvt.depth = 0;
+
+    children.sort((a, b) => a.ts - b.ts || b.dur - a.dur);
+    const childEnds = [];
+    for (const e of children) {
+      let placed = false;
+      for (let d = 0; d < childEnds.length; d++) {
+        if (e.ts >= childEnds[d]) { e.depth = 1 + d; childEnds[d] = e.end; placed = true; break; }
+      }
+      if (!placed) { e.depth = 1 + childEnds.length; childEnds.push(e.end); }
+    }
+
+    const allEvts = [reqEvt, ...children];
+    let spanStart = reqEvt.ts, spanEnd = reqEvt.end;
+    for (const e of children) {
+      if (e.ts  < spanStart) spanStart = e.ts;
+      if (e.end > spanEnd)   spanEnd   = e.end;
+    }
+    const maxDepth = children.length > 0 ? Math.max(...children.map(e => e.depth)) : 0;
+    packages.push({ reqId, evts: allEvts, spanStart, spanEnd, maxDepth });
+  }
+  // Also pack ungrouped (model) events as packages, one per tid
+  if (ungrouped.length > 0) {
+    const byTid = new Map();
+    for (const e of ungrouped) {
+      if (!byTid.has(e.tid)) byTid.set(e.tid, []);
+      byTid.get(e.tid).push(e);
+    }
+    for (const [tid, evts] of byTid) {
+      evts.sort((a, b) => a.ts - b.ts || b.dur - a.dur);
+      const ends = [];
+      for (const e of evts) {
+        let placed = false;
+        for (let d = 0; d < ends.length; d++) {
+          if (e.ts >= ends[d]) { e.depth = d; ends[d] = e.end; placed = true; break; }
+        }
+        if (!placed) { e.depth = ends.length; ends.push(e.end); }
+      }
+      let spanStart = evts[0].ts, spanEnd = evts[0].end;
+      for (const e of evts) {
+        if (e.ts  < spanStart) spanStart = e.ts;
+        if (e.end > spanEnd)   spanEnd   = e.end;
+      }
+      const maxDepth = Math.max(0, ...evts.map(e => e.depth));
+      packages.push({ reqId: tid, evts, spanStart, spanEnd, maxDepth });
+    }
+  }
+
+  packages.sort((a, b) => a.spanStart - b.spanStart);
+
+  // Greedy interval scheduling: pack non-overlapping packages into shared tracks.
+  const tracks = []; // { events[], lastEnd, maxDepth }
+  for (const pkg of packages) {
+    let assigned = false;
+    for (const track of tracks) {
+      if (pkg.spanStart >= track.lastEnd) {
+        track.events.push(...pkg.evts);
+        track.lastEnd  = pkg.spanEnd;
+        track.maxDepth = Math.max(track.maxDepth, pkg.maxDepth);
+        assigned = true;
+        break;
+      }
+    }
+    if (!assigned) {
+      tracks.push({ events: [...pkg.evts], lastEnd: pkg.spanEnd, maxDepth: pkg.maxDepth });
+    }
+  }
+
+  // Each track becomes one lane
+  for (let i = 0; i < tracks.length; i++) {
+    const { events: evts, maxDepth } = tracks[i];
+    assignColors(evts);
+    const laneHeight = (maxDepth + 1) * (ROW_HEIGHT + LANE_PADDING) + LANE_GAP;
+    lanes.push({ tid: `track_${i}`, label: `Track ${i + 1}`, events: evts, maxDepth, height: laneHeight, idx: lanes.length });
+  }
+
+  // Compute y offsets
+  let y = 0;
+  for (const lane of lanes) { lane.yOffset = y; y += lane.height; }
+
+  return {
+    lanes,
+    globalMin,
+    globalMax,
+    totalDur: globalMax - globalMin,
+    totalHeight: y,
+    allEvents: lanes.flatMap(l => l.events),
+  };
+}
+
+// ============================================================
+// Filter helpers
+// ============================================================
+
+function matchesFilter(evt) {
+  if (filterName) {
+    if (!evt.name.toLowerCase().includes(filterName)) return false;
+  }
+  if (filterReqId) {
+    const rid = evt._reqId || evt._parentReqId || evt.args?.req_id;
+    if (!rid || !rid.toLowerCase().includes(filterReqId)) return false;
+  }
+  if (filterDepth !== null) {
+    if (evt.depth !== filterDepth) return false;
+  }
+  return true;
+}
+
+function fmtDur(us) {
+  if (us >= 1e6) return (us / 1e6).toFixed(2) + 's';
+  if (us >= 1e3) return (us / 1e3).toFixed(1) + 'ms';
+  return us.toFixed(0) + 'µs';
+}
+
+function updateFilterStats() {
+  const anyActive = filterName || filterReqId || filterDepth !== null;
+  filterNameInput.classList.toggle('active', !!filterName);
+  filterNameClear.classList.toggle('visible', !!filterName);
+  filterReqInput.classList.toggle('active', !!filterReqId);
+  filterReqClear.classList.toggle('visible', !!filterReqId);
+  filterDepthInput.classList.toggle('active', filterDepth !== null);
+  filterDepthClear.classList.toggle('visible', filterDepth !== null);
+
+  if (!anyActive || !traceData) {
+    filterStats.classList.remove('visible');
+    canvasRect = canvasWrap.getBoundingClientRect();
+    return;
+  }
+
+  let count = 0, total = 0, minD = Infinity, maxD = -Infinity;
+  const intervals = [];
+  for (const lane of traceData.lanes) {
+    for (const evt of lane.events) {
+      if (!matchesFilter(evt)) continue;
+      count++;
+      total += evt.dur;
+      if (evt.dur < minD) minD = evt.dur;
+      if (evt.dur > maxD) maxD = evt.dur;
+      intervals.push([evt.ts, evt.end]);
+    }
+  }
+
+  // Compute wall time: merge overlapping intervals so nested/overlapping
+  // events aren't double-counted.
+  let wall = 0;
+  if (intervals.length > 0) {
+    intervals.sort((a, b) => a[0] - b[0]);
+    let curStart = intervals[0][0], curEnd = intervals[0][1];
+    for (let i = 1; i < intervals.length; i++) {
+      const [s, e] = intervals[i];
+      if (s <= curEnd) {
+        if (e > curEnd) curEnd = e;
+      } else {
+        wall += curEnd - curStart;
+        curStart = s; curEnd = e;
+      }
+    }
+    wall += curEnd - curStart;
+  }
+
+  if (count === 0) {
+    fsMatches.textContent = '0 matches';
+    fsWall.textContent = fsTotal.textContent = fsAvg.textContent = fsMin.textContent = fsMax.textContent = '—';
+  } else {
+    fsMatches.textContent = count.toLocaleString() + ' events';
+    fsWall.textContent  = fmtDur(wall);
+    fsTotal.textContent = fmtDur(total);
+    fsAvg.textContent   = fmtDur(total / count);
+    fsMin.textContent   = fmtDur(minD);
+    fsMax.textContent   = fmtDur(maxD);
+  }
+  filterStats.classList.add('visible');
+  // Re-cache canvas rect — filter bar shifts the canvas position
+  canvasRect = canvasWrap.getBoundingClientRect();
+}
+
+// ============================================================
+// Coordinate helpers
+// ============================================================
+
+function timeToX(us) {
+  return (us - traceData.globalMin - viewState.offsetUs) * viewState.scaleX;
+}
+
+function xToTime(px) {
+  return px / viewState.scaleX + traceData.globalMin + viewState.offsetUs;
+}
+
+function canvasWidth() { return mainCanvas.width; }
+function canvasHeight(){ return mainCanvas.height; }
+
+function laneRowY(lane, depth) {
+  return lane.yOffset + LANE_GAP / 2 + depth * (ROW_HEIGHT + LANE_PADDING);
+}
+
+// ============================================================
+// Resize handling
+// ============================================================
+
+function resizeCanvases() {
+  const dpr = window.devicePixelRatio || 1;
+
+  // Main canvas
+  const mw = canvasWrap.clientWidth;
+  const mh = canvasWrap.clientHeight;
+  if (mainCanvas.width !== mw * dpr || mainCanvas.height !== mh * dpr) {
+    mainCanvas.width  = mw * dpr;
+    mainCanvas.height = mh * dpr;
+    mainCanvas.style.width  = mw + 'px';
+    mainCanvas.style.height = mh + 'px';
+    mCtx.scale(dpr, dpr);
+  }
+
+  // Ruler canvas
+  const rw = rulerWrap.clientWidth;
+  const rh = rulerWrap.clientHeight;
+  if (rulerCanvas.width !== rw * dpr || rulerCanvas.height !== rh * dpr) {
+    rulerCanvas.width  = rw * dpr;
+    rulerCanvas.height = rh * dpr;
+    rulerCanvas.style.width  = rw + 'px';
+    rulerCanvas.style.height = rh + 'px';
+    rCtx.scale(dpr, dpr);
+  }
+
+  // Minimap canvas
+  const mmw = mmWrap.clientWidth;
+  const mmh = mmWrap.clientHeight;
+  if (minimapCanvas.width !== mmw * dpr || minimapCanvas.height !== mmh * dpr) {
+    minimapCanvas.width  = mmw * dpr;
+    minimapCanvas.height = mmh * dpr;
+    minimapCanvas.style.width  = mmw + 'px';
+    minimapCanvas.style.height = mmh + 'px';
+    mmCtx.scale(dpr, dpr);
+    minimapImageData = null; // invalidate cached minimap
+  }
+
+  // Update cached rects after layout settles
+  canvasRect = canvasWrap.getBoundingClientRect();
+  mmRect     = mmWrap.getBoundingClientRect();
+
+  dirty = true;
+  minimapDirty = true;
+}
+
+// ============================================================
+// Rendering: Ruler
+// ============================================================
+
+function renderRuler() {
+  if (!traceData) {
+    rCtx.clearRect(0, 0, rulerCanvas.width, rulerCanvas.height);
+    return;
+  }
+
+  const w = rulerWrap.clientWidth;
+  const h = rulerWrap.clientHeight;
+
+  rCtx.clearRect(0, 0, w, h);
+  rCtx.fillStyle = '#383838';
+  rCtx.fillRect(0, 0, w, h);
+
+  // Determine nice tick interval
+  const visibleUs = w / viewState.scaleX;
+  const rawInterval = visibleUs / 8;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawInterval)));
+  const nice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+  let tickInterval = magnitude;
+  for (const n of nice) {
+    if (magnitude * n >= rawInterval) { tickInterval = magnitude * n; break; }
+  }
+
+  const startTime = traceData.globalMin + viewState.offsetUs;
+  const firstTick = Math.ceil(startTime / tickInterval) * tickInterval;
+
+  rCtx.strokeStyle = '#505050';
+  rCtx.fillStyle = '#c0c0c0';
+  rCtx.font = '400 11px Roboto, sans-serif';
+  rCtx.textAlign = 'left';
+  rCtx.lineWidth = 1;
+
+  for (let t = firstTick; t <= startTime + visibleUs; t += tickInterval) {
+    const x = (t - startTime) * viewState.scaleX;
+    if (x < 0 || x > w) continue;
+
+    rCtx.beginPath();
+    rCtx.moveTo(x, h - 8);
+    rCtx.lineTo(x, h);
+    rCtx.stroke();
+
+    const label = formatTime(t - traceData.globalMin);
+    const textX = x + 3;
+    if (textX + 60 < w) {
+      rCtx.fillText(label, textX, h - 10);
+    }
+  }
+
+  // Bottom border
+  rCtx.strokeStyle = '#303035';
+  rCtx.beginPath();
+  rCtx.moveTo(0, h - 1);
+  rCtx.lineTo(w, h - 1);
+  rCtx.stroke();
+}
+
+function formatTime(us) {
+  if (us >= 1e6) return (us / 1e6).toFixed(3) + 's';
+  if (us >= 1e3) return (us / 1e3).toFixed(2) + 'ms';
+  return us.toFixed(1) + 'µs';
+}
+
+function formatDuration(us) {
+  if (us >= 1e6) return (us / 1e6).toFixed(4) + 's';
+  if (us >= 1e3) return (us / 1e3).toFixed(3) + 'ms';
+  return us.toFixed(2) + 'µs';
+}
+
+// ============================================================
+// Rendering: Main Canvas
+// ============================================================
+
+function renderMain() {
+  if (!traceData) {
+    mCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+    return;
+  }
+
+  const w = canvasWrap.clientWidth;
+  const h = canvasWrap.clientHeight;
+  const scaleX = viewState.scaleX;
+
+  mCtx.clearRect(0, 0, w, h);
+  mCtx.fillStyle = '#353535';
+  mCtx.fillRect(0, 0, w, h);
+
+  // Vertical grid lines — batched into a single path
+  const visibleUs = w / scaleX;
+  const rawInterval = visibleUs / 8;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawInterval)));
+  const nice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+  let tickInterval = magnitude;
+  for (const n of nice) {
+    if (magnitude * n >= rawInterval) { tickInterval = magnitude * n; break; }
+  }
+  const startTime = traceData.globalMin + viewState.offsetUs;
+  const firstTick = Math.ceil(startTime / tickInterval) * tickInterval;
+
+  mCtx.beginPath();
+  mCtx.strokeStyle = '#484848';
+  mCtx.lineWidth = 1;
+  for (let t = firstTick; t <= startTime + visibleUs; t += tickInterval) {
+    const x = (t - startTime) * scaleX;
+    mCtx.moveTo(x, 0);
+    mCtx.lineTo(x, h);
+  }
+  mCtx.stroke();
+
+  // Draw lanes
+  const scrollTop = getScrollTop();
+
+  // Hoist lane divider style — same for all lanes
+  mCtx.strokeStyle = '#505050';
+  mCtx.lineWidth = 1;
+
+  // Batch all lane dividers into one path
+  mCtx.beginPath();
+  for (const lane of traceData.lanes) {
+    const laneTop = lane.yOffset - scrollTop;
+    const laneBot = laneTop + lane.height;
+    if (laneBot < 0 || laneTop > h) continue;
+    mCtx.moveTo(0, laneBot - 1);
+    mCtx.lineTo(w, laneBot - 1);
+  }
+  mCtx.stroke();
+
+  // Hoist text state — same for all labels
+  mCtx.font = '400 11px Roboto, sans-serif';
+  mCtx.textAlign = 'left';
+  mCtx.textBaseline = 'middle';
+
+  for (const lane of traceData.lanes) {
+    const laneTop = lane.yOffset - scrollTop;
+    const laneBot = laneTop + lane.height;
+    if (laneBot < 0 || laneTop > h) continue;
+
+    // Lane background (subtle alternating)
+    if (lane.idx % 2 === 0) {
+      mCtx.fillStyle = 'rgba(255,255,255,0.015)';
+      mCtx.fillRect(0, laneTop, w, lane.height);
+    }
+
+    // Draw events in this lane
+    const rowNextX = [];
+
+    for (const evt of lane.events) {
+      const naturalW = evt.dur * scaleX;
+      const x = timeToX(evt.ts);
+      const evtW = Math.max(MIN_EVENT_W, naturalW);
+
+      // Cull off-screen
+      if (x + evtW < 0 || x > w) continue;
+
+      const isHovered  = evt === hoveredEvent;
+      const isSelected = evt === selectedEvent;
+      const matched    = matchesFilter(evt);
+
+      // Overdraw culling: skip events visually covered by the previous one on the same row
+      if (!isHovered && !isSelected) {
+        const depth = evt.depth;
+        const nx = rowNextX[depth] ?? -Infinity;
+        if (naturalW < 2 && x < nx) continue;
+        rowNextX[depth] = x + evtW;
+      }
+
+      const y = laneTop + LANE_GAP / 2 + evt.depth * (ROW_HEIGHT + LANE_PADDING);
+      const depthColor = evt.color;
+      mCtx.globalAlpha = ((filterName || filterReqId) && !matched) ? 0.1 : 1.0;
+
+      if (evtW <= 2) {
+        mCtx.fillStyle = depthColor;
+        mCtx.fillRect(Math.round(x), y, 1, ROW_HEIGHT);
+      } else {
+        mCtx.fillStyle = isSelected ? lighten(depthColor, 35) : isHovered ? lighten(depthColor, 20) : depthColor;
+        roundRect(mCtx, x, y, evtW, ROW_HEIGHT, 2);
+        mCtx.fill();
+
+        if (isSelected) {
+          mCtx.strokeStyle = '#ffffff';
+          mCtx.lineWidth = 1.5;
+          roundRect(mCtx, x, y, evtW, ROW_HEIGHT, 2);
+          mCtx.stroke();
+          // Restore hoisted state
+          mCtx.strokeStyle = '#505050';
+          mCtx.lineWidth = 1;
+        }
+
+        // Label text (only if wide enough)
+        if (evtW > 30) {
+          const clipX = Math.max(0, x);
+          const clipW = Math.min(evtW, w - clipX);
+          mCtx.save();
+          mCtx.beginPath();
+          mCtx.rect(clipX, y, clipW, ROW_HEIGHT);
+          mCtx.clip();
+          mCtx.fillStyle = evt.textColor;
+          mCtx.fillText(evt.name, clipX + 4, y + ROW_HEIGHT / 2);
+          mCtx.restore();
+        }
+      }
+    }
+  }
+  mCtx.globalAlpha = 1.0;
+}
+
+// ============================================================
+// Rendering: Minimap
+// ============================================================
+
+function renderMinimap() {
+  if (!traceData) {
+    mmCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+    return;
+  }
+
+  const w = mmWrap.clientWidth;
+  const h = mmWrap.clientHeight;
+
+  // Draw cached minimap image if available
+  if (!minimapDirty && minimapImageData) {
+    mmCtx.putImageData(minimapImageData, 0, 0);
+  } else {
+    // Render minimap
+    mmCtx.clearRect(0, 0, w, h);
+    mmCtx.fillStyle = '#353535';
+    mmCtx.fillRect(0, 0, w, h);
+
+    const totalDur = traceData.totalDur;
+    const mmScaleX = w / totalDur;
+    const mmScaleY = h / traceData.totalHeight;
+
+    for (const lane of traceData.lanes) {
+      for (const evt of lane.events) {
+        const x = (evt.ts - traceData.globalMin) * mmScaleX;
+        const evtW = Math.max(1, evt.dur * mmScaleX);
+        const y = (lane.yOffset + evt.depth * (ROW_HEIGHT + LANE_PADDING)) * mmScaleY;
+        const evtH = Math.max(1, ROW_HEIGHT * mmScaleY);
+        mmCtx.fillStyle = CAT_COLORS[evt.cat] || CAT_COLORS.default;
+        mmCtx.globalAlpha = 1.0;
+        mmCtx.fillRect(x, y, evtW, evtH);
+      }
+    }
+    mmCtx.globalAlpha = 1;
+
+    // Cache
+    minimapImageData = mmCtx.getImageData(0, 0, minimapCanvas.width, minimapCanvas.height);
+    minimapDirty = false;
+  }
+
+  // Draw viewport indicator
+  const totalDur = traceData.totalDur;
+  const mmScaleX = w / totalDur;
+  const vpLeft  = (viewState.offsetUs / totalDur) * w;
+  const vpWidth = (canvasWrap.clientWidth / viewState.scaleX / totalDur) * w;
+
+  mmCtx.fillStyle = 'rgba(88, 166, 255, 0.12)';
+  mmCtx.fillRect(vpLeft, 0, vpWidth, h);
+
+  mmCtx.strokeStyle = 'rgba(88, 166, 255, 0.7)';
+  mmCtx.lineWidth = 1.5;
+  mmCtx.strokeRect(vpLeft, 0, vpWidth, h);
+}
+
+// ============================================================
+// Rendering: Thread Labels
+// ============================================================
+
+function updateThreadLabels() {
+  if (!traceData) {
+    labelsInner.innerHTML = '';
+    return;
+  }
+
+  const scrollTop = getScrollTop();
+  labelsInner.style.transform = `translateY(${-scrollTop}px)`;
+
+  // Only rebuild if needed
+  if (labelsInner.children.length === traceData.lanes.length) return;
+
+  labelsInner.innerHTML = '';
+  for (const lane of traceData.lanes) {
+    const div = document.createElement('div');
+    div.className = 'thread-label';
+    div.style.height = lane.height + 'px';
+    const span = document.createElement('span');
+    span.textContent = lane.label || lane.tid;
+    span.title = lane.tid; // full id on hover
+    div.appendChild(span);
+    labelsInner.appendChild(div);
+  }
+}
+
+// ============================================================
+// Scroll (vertical)
+// ============================================================
+
+let scrollTopVal = 0;
+
+function getScrollTop() { return scrollTopVal; }
+
+function setScrollTop(v) {
+  if (!traceData) { scrollTopVal = 0; return; }
+  const maxScroll = Math.max(0, traceData.totalHeight - canvasWrap.clientHeight);
+  scrollTopVal = Math.max(0, Math.min(v, maxScroll));
+}
+
+// ============================================================
+// Zoom helpers
+// ============================================================
+
+function minScale() {
+  if (!traceData) return 1e-6;
+  return canvasWrap.clientWidth / traceData.totalDur;
+}
+
+function clampOffset() {
+  if (!traceData) return;
+  const maxOffset = traceData.totalDur - canvasWrap.clientWidth / viewState.scaleX;
+  viewState.offsetUs = Math.max(0, Math.min(viewState.offsetUs, Math.max(0, maxOffset)));
+}
+
+function resetZoom() {
+  if (!traceData) return;
+  const w = canvasWrap.clientWidth;
+  viewState.scaleX = w / traceData.totalDur;
+  viewState.offsetUs = 0;
+  scrollTopVal = 0;
+  invalidate();
+}
+
+// ============================================================
+// Hit testing
+// ============================================================
+
+function hitTest(mx, my) {
+  if (!traceData) return null;
+  const t = xToTime(mx);
+  const scrollTop = getScrollTop();
+  const adjustedY = my + scrollTop;
+
+  for (const lane of traceData.lanes) {
+    if (adjustedY < lane.yOffset || adjustedY > lane.yOffset + lane.height) continue;
+
+    // Binary search to find the rightmost event with ts <= t
+    const evts = lane.events;
+    let lo = 0, hi = evts.length - 1, start = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      if (evts[mid].ts <= t) { start = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+
+    // Scan backwards from start to find all events that contain t.
+    // No early break — a large parent event starting far earlier can still span past t.
+    // Prefer the deepest (most nested) match so clicking selects the child, not the parent.
+    let best = null;
+    for (let i = start; i >= 0; i--) {
+      const evt = evts[i];
+      if (t < evt.ts || t > evt.end) continue;
+      const yTop = lane.yOffset + LANE_GAP / 2 + evt.depth * (ROW_HEIGHT + LANE_PADDING);
+      const yBot = yTop + ROW_HEIGHT;
+      if (adjustedY >= yTop && adjustedY <= yBot) {
+        if (!best || evt.depth > best.depth) best = evt;
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
+// ============================================================
+// Tooltip
+// ============================================================
+
+function showTooltip(evt, mx, my) {
+  const color = CAT_COLORS[evt.cat] || CAT_COLORS.default;
+  let html = `<div class="tt-name">${escHtml(evt.name)}</div>`;
+  html += `<div class="tt-row"><span class="tt-key">cat:</span><span class="tt-val" style="color:${color}">${escHtml(evt.cat)}</span></div>`;
+  html += `<div class="tt-row"><span class="tt-key">start:</span><span class="tt-val">${formatTime(evt.ts - traceData.globalMin)}</span></div>`;
+  html += `<div class="tt-row"><span class="tt-key">dur:</span><span class="tt-val">${formatDuration(evt.dur)}</span></div>`;
+  html += `<div class="tt-row"><span class="tt-key">tid:</span><span class="tt-val">${escHtml(evt.tid)}</span></div>`;
+  if (evt.args) {
+    for (const [k, v] of Object.entries(evt.args)) {
+      html += `<div class="tt-row"><span class="tt-key">${escHtml(k)}:</span><span class="tt-val">${escHtml(String(v))}</span></div>`;
+    }
+  }
+  tooltip.innerHTML = html;
+  tooltip.classList.add('visible');
+  positionTooltip(mx, my);
+}
+
+function hideTooltip() {
+  tooltip.classList.remove('visible');
+}
+
+function positionTooltip(mx, my) {
+  const tw = tooltip.offsetWidth;
+  const th = tooltip.offsetHeight;
+  const margin = 14;
+  let left = mx + margin;
+  let top  = my - th / 2;
+  if (left + tw > window.innerWidth - 8) left = mx - tw - margin;
+  if (top < 8) top = 8;
+  if (top + th > window.innerHeight - 8) top = window.innerHeight - 8 - th;
+  tooltip.style.left = left + 'px';
+  tooltip.style.top  = top  + 'px';
+}
+
+// ============================================================
+// Details panel
+// ============================================================
+
+function showDetails(evt) {
+  selectedEvent = evt;
+  const color = CAT_COLORS[evt.cat] || CAT_COLORS.default;
+
+  let html = `
+    <div class="detail-group">
+      <label>Name</label>
+      <div class="val">${escHtml(evt.name)}</div>
+    </div>
+    <div class="detail-group">
+      <label>Category</label>
+      <div class="val"><span class="detail-cat-badge" style="background:${color}22;color:${color}">${escHtml(evt.cat)}</span></div>
+    </div>
+    <div class="detail-group">
+      <label>Thread</label>
+      <div class="val">${escHtml(evt.tid)}</div>
+    </div>
+    <div class="detail-group">
+      <label>Start time</label>
+      <div class="val">${formatTime(evt.ts - traceData.globalMin)}</div>
+    </div>
+    <div class="detail-group">
+      <label>Duration</label>
+      <div class="val">${formatDuration(evt.dur)}</div>
+    </div>
+    <div class="detail-group">
+      <label>End time</label>
+      <div class="val">${formatTime(evt.end - traceData.globalMin)}</div>
+    </div>
+  `;
+
+  if (evt.args) {
+    for (const [k, v] of Object.entries(evt.args)) {
+      const formatted = typeof v === 'number' ? formatBytes(v, k) : escHtml(String(v));
+      html += `
+        <div class="detail-group">
+          <label>${escHtml(k)}</label>
+          <div class="val">${formatted}</div>
+        </div>
+      `;
+    }
+  }
+
+  detailsInner.innerHTML = html;
+  detailsPanel.classList.add('open');
+  invalidate();
+}
+
+function hideDetails() {
+  selectedEvent = null;
+  detailsPanel.classList.remove('open');
+  invalidate();
+}
+
+function formatBytes(n, key) {
+  // Heuristic: if key contains 'bytes' and value is large, format as bytes
+  if (key.toLowerCase().includes('byte') && n > 1024) {
+    const gb = n / (1024 ** 3);
+    if (gb >= 1) return `${gb.toFixed(2)} GB`;
+    const mb = n / (1024 ** 2);
+    if (mb >= 1) return `${mb.toFixed(2)} MB`;
+    return `${(n / 1024).toFixed(2)} KB`;
+  }
+  return escHtml(String(n));
+}
+
+// ============================================================
+// Render loop
+// ============================================================
+
+function invalidate() { dirty = true; }
+
+function renderLoop() {
+  animFrame = requestAnimationFrame(renderLoop);
+  if (!dirty) return;
+  dirty = false;
+
+  updateThreadLabels();
+  renderRuler();
+  renderMain();
+  renderMinimap();
+}
+
+// ============================================================
+// Canvas utilities
+// ============================================================
+
+function roundRect(ctx, x, y, w, h, r) {
+  if (w < 2 * r) r = w / 2;
+  if (h < 2 * r) r = h / 2;
+  if (r <= 0) { ctx.rect(x, y, w, h); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function lighten(hex, amt) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  let r = (num >> 16) & 0xff;
+  let g = (num >> 8)  & 0xff;
+  let b =  num        & 0xff;
+  r = Math.min(255, r + amt);
+  g = Math.min(255, g + amt);
+  b = Math.min(255, b + amt);
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+// Perfetto approach: pick black or white text based on perceived luminance of bg
+function textColorForBg(hex) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >>  8) & 0xff;
+  const b =  num        & 0xff;
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.5 ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.92)';
+}
+
+function darken(hex, amt) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  let r = (num >> 16) & 0xff;
+  let g = (num >> 8)  & 0xff;
+  let b =  num        & 0xff;
+  r = Math.max(0, r - amt);
+  g = Math.max(0, g - amt);
+  b = Math.max(0, b - amt);
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// File loading
+// ============================================================
+
+function loadTrace(json) {
+  let raw;
+  try { raw = JSON.parse(json); }
+  catch (e) { alert('Invalid JSON: ' + e.message); return; }
+
+  traceData = processTrace(raw);
+  scrollTopVal = 0;
+  selectedEvent = null;
+  hoveredEvent = null;
+  updateFilterStats();
+  detailsPanel.classList.remove('open');
+  minimapDirty = true;
+  minimapImageData = null;
+
+  landing.classList.add('hidden');
+  resetBtn.disabled = false;
+  resetZoom();
+
+  const n = traceData.allEvents.length;
+  const dur = formatTime(traceData.totalDur);
+  traceInfo.textContent = `${n.toLocaleString()} events · ${dur} · ${traceData.lanes.length} threads`;
+
+  invalidate();
+}
+
+// ============================================================
+// Event handlers: file
+// ============================================================
+
+fileBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadTrace(ev.target.result);
+  reader.readAsText(file);
+  fileInput.value = '';
+});
+
+resetBtn.addEventListener('click', resetZoom);
+detailsClose.addEventListener('click', hideDetails);
+
+filterNameInput.addEventListener('input', () => {
+  filterName = filterNameInput.value.trim().toLowerCase();
+  updateFilterStats();
+  invalidate();
+});
+filterNameClear.addEventListener('click', () => {
+  filterNameInput.value = '';
+  filterName = '';
+  updateFilterStats();
+  invalidate();
+  filterNameInput.focus();
+});
+filterReqInput.addEventListener('input', () => {
+  filterReqId = filterReqInput.value.trim().toLowerCase();
+  updateFilterStats();
+  invalidate();
+});
+filterReqClear.addEventListener('click', () => {
+  filterReqInput.value = '';
+  filterReqId = '';
+  updateFilterStats();
+  invalidate();
+  filterReqInput.focus();
+});
+filterDepthInput.addEventListener('input', () => {
+  const raw = filterDepthInput.value.trim();
+  const parsed = parseInt(raw, 10);
+  filterDepth = (raw !== '' && !isNaN(parsed) && parsed >= 0) ? parsed : null;
+  updateFilterStats();
+  invalidate();
+});
+filterDepthClear.addEventListener('click', () => {
+  filterDepthInput.value = '';
+  filterDepth = null;
+  updateFilterStats();
+  invalidate();
+  filterDepthInput.focus();
+});
+
+// ============================================================
+// Event handlers: drag & drop
+// ============================================================
+
+let dragEnterCount = 0;
+
+document.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  dragEnterCount++;
+  dropOverlay.classList.add('active');
+});
+
+document.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragEnterCount--;
+  if (dragEnterCount <= 0) {
+    dragEnterCount = 0;
+    dropOverlay.classList.remove('active');
+  }
+});
+
+document.addEventListener('dragover', (e) => { e.preventDefault(); });
+
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragEnterCount = 0;
+  dropOverlay.classList.remove('active');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => loadTrace(ev.target.result);
+  reader.readAsText(file);
+});
+
+// ============================================================
+// Event handlers: canvas mouse / wheel
+// ============================================================
+
+canvasWrap.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (!traceData) return;
+
+  const rect = canvasRect;
+
+  if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    // Horizontal scroll
+    const delta = e.shiftKey ? e.deltaY : e.deltaX;
+    viewState.offsetUs += (delta / viewState.scaleX) * 0.5;
+    clampOffset();
+  } else if (e.ctrlKey || e.metaKey) {
+    // Zoom (pinch gesture sends ctrl+wheel)
+    const mouseX = e.clientX - rect.left;
+    const timeAtMouse = xToTime(mouseX);
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const newScale = Math.max(minScale(), Math.min(viewState.scaleX * factor, 1e6));
+    const newOffset = timeAtMouse - traceData.globalMin - mouseX / newScale;
+    viewState.scaleX  = newScale;
+    viewState.offsetUs = Math.max(0, newOffset);
+    clampOffset();
+  } else if (e.altKey) {
+    // Alt+wheel → zoom
+    const mouseX = e.clientX - rect.left;
+    const timeAtMouse = xToTime(mouseX);
+    const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+    const newScale = Math.max(minScale(), Math.min(viewState.scaleX * factor, 1e6));
+    const newOffset = timeAtMouse - traceData.globalMin - mouseX / newScale;
+    viewState.scaleX   = newScale;
+    viewState.offsetUs = Math.max(0, newOffset);
+    clampOffset();
+  } else {
+    // Plain wheel → vertical scroll
+    setScrollTop(scrollTopVal + e.deltaY);
+    updateThreadLabels();
+  }
+
+  invalidate();
+}, { passive: false });
+
+// Pan
+canvasWrap.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  isDragging = true;
+  dragStartX = e.clientX;
+  dragStartOffset = viewState.offsetUs;
+  canvasWrap.style.cursor = 'grabbing';
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (isDragging) {
+    const dx = e.clientX - dragStartX;
+    viewState.offsetUs = dragStartOffset - dx / viewState.scaleX;
+    clampOffset();
+    invalidate();
+    return;
+  }
+
+  if (!traceData) return;
+
+  const rect = canvasRect;
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  const hit = hitTest(mx, my);
+  if (hit !== hoveredEvent) {
+    hoveredEvent = hit;
+    invalidate();
+  }
+
+  if (hit) {
+    showTooltip(hit, e.clientX, e.clientY);
+    canvasWrap.style.cursor = 'pointer';
+  } else {
+    hideTooltip();
+    if (!isDragging) canvasWrap.style.cursor = 'crosshair';
+  }
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (isDragging) {
+    const dx = Math.abs(e.clientX - dragStartX);
+    isDragging = false;
+    canvasWrap.style.cursor = hoveredEvent ? 'pointer' : 'crosshair';
+
+    if (dx < 5) {
+      // Treat as click
+      const rect = canvasRect;
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const hit = hitTest(mx, my);
+      if (hit) showDetails(hit);
+      else hideDetails();
+    }
+  }
+
+  if (minimapDragging) {
+    minimapDragging = false;
+  }
+});
+
+
+// Keyboard shortcut: R to reset zoom
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') resetZoom();
+  if (e.key === 'Escape') hideDetails();
+});
+
+// ============================================================
+// Minimap interaction
+// ============================================================
+
+mmWrap.addEventListener('mousedown', (e) => {
+  if (!traceData) return;
+  minimapDragging = true;
+  minimapDragStartX = e.clientX;
+  minimapDragStartOffset = viewState.offsetUs;
+  seekMinimap(e);
+});
+
+mmWrap.addEventListener('mousemove', (e) => {
+  if (!minimapDragging) return;
+  seekMinimap(e);
+});
+
+function seekMinimap(e) {
+  if (!traceData) return;
+  const rect = mmRect;
+  const mx = e.clientX - rect.left;
+  const w  = rect.width;
+  const frac = Math.max(0, Math.min(1, mx / w));
+  const vwUs = canvasWrap.clientWidth / viewState.scaleX;
+  viewState.offsetUs = frac * traceData.totalDur - vwUs / 2;
+  clampOffset();
+  invalidate();
+}
+
+// ============================================================
+// Resize observer
+// ============================================================
+
+const ro = new ResizeObserver(() => {
+  resizeCanvases();
+  if (traceData) clampOffset();
+  invalidate();
+});
+ro.observe(canvasWrap);
+ro.observe(rulerWrap);
+ro.observe(mmWrap);
+
+// ============================================================
+// Bootstrap
+// ============================================================
+
+resizeCanvases();
+renderLoop();
+</script>
+</body>
+</html>
