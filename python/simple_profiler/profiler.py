@@ -29,6 +29,8 @@ class Profiler:
                     cls._instance._start_ts = None
                     cls._instance._prev_sigint = None
                     cls._instance._prev_sigterm = None
+                    cls._instance._merge_mode = False
+                    cls._instance._session_count = 0
                     # GPU time reference: a CUDA event recorded + sync'd at session
                     # start, paired with the CPU wall-clock time at that moment.
                     # Used to convert CUDA elapsed_time() offsets into real wall-clock
@@ -53,11 +55,27 @@ class Profiler:
         else:
             raise SystemExit(0)
 
-    def begin_session(self, filepath="results.json"):
+    def begin_session(self, filepath="results.json", merge=False):
         if _DISABLED:
             return
+        if merge:
+            if self._session_count == 0:
+                # First session in merge mode: full init
+                self._merge_mode = True
+                self._active = True
+                self._filepath = filepath
+                self._events = []
+                self._gpu_events = []
+                self._start_ts = time.perf_counter_ns()
+                self._prev_sigint = signal.signal(signal.SIGINT, self._sigint_handler)
+                self._prev_sigterm = signal.signal(signal.SIGTERM, self._sigterm_handler)
+            self._session_count += 1
+            return
+        # Non-merge mode: original behaviour
         if self._active:
             self.end_session()
+        self._merge_mode = False
+        self._session_count = 1
         self._active = True
         self._filepath = filepath
         self._events = []
@@ -85,6 +103,10 @@ class Profiler:
     def end_session(self):
         if not self._active:
             return
+        if self._merge_mode:
+            self._session_count -= 1
+            if self._session_count > 0:
+                return
         import traceback
         is_main = threading.current_thread() is threading.main_thread()
         print(f"ending session for {self._filepath} (main_thread={is_main}, tid={threading.get_ident()})")
@@ -172,6 +194,8 @@ class Profiler:
                 pass
             return
         self._events = []
+        self._merge_mode = False
+        self._session_count = 0
         print(f"[profiler] wrote {self._filepath}")
 
     def add_gpu_event(self, name, category, wall_start_ns, cuda_start, cuda_end,
