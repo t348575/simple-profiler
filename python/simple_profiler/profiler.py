@@ -1,4 +1,5 @@
 import atexit
+import fcntl
 import functools
 import json
 import os
@@ -29,8 +30,7 @@ class Profiler:
                     cls._instance._start_ts = None
                     cls._instance._prev_sigint = None
                     cls._instance._prev_sigterm = None
-                    cls._instance._merge_mode = False
-                    cls._instance._session_count = 0
+                    cls._instance._merge_output = None
                     # GPU time reference: a CUDA event recorded + sync'd at session
                     # start, paired with the CPU wall-clock time at that moment.
                     # Used to convert CUDA elapsed_time() offsets into real wall-clock
@@ -55,27 +55,45 @@ class Profiler:
         else:
             raise SystemExit(0)
 
-    def begin_session(self, filepath="results.json", merge=False):
+    def _registry_register(self, filepath, merge_output):
+        """Atomically add this process's filepath to the shared merge registry."""
+        rpath = merge_output + ".registry"
+        with open(rpath, "a+b") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.seek(0)
+                raw = f.read()
+                data = json.loads(raw) if raw.strip() else {"output": merge_output, "files": [], "pending": 0}
+                if filepath not in data["files"]:
+                    data["files"].append(filepath)
+                    data["pending"] += 1
+                f.seek(0)
+                f.truncate()
+                f.write(json.dumps(data).encode())
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+    def _registry_finish(self, filepath, merge_output):
+        """Atomically decrement pending count. Returns (is_last, all_files)."""
+        rpath = merge_output + ".registry"
+        with open(rpath, "r+b") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                data = json.loads(f.read())
+                data["pending"] = max(0, data["pending"] - 1)
+                f.seek(0)
+                f.truncate()
+                f.write(json.dumps(data).encode())
+                return data["pending"] == 0, data["files"]
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+    def begin_session(self, filepath="results.json", merge_output=None):
         if _DISABLED:
             return
-        if merge:
-            if self._session_count == 0:
-                # First session in merge mode: full init
-                self._merge_mode = True
-                self._active = True
-                self._filepath = filepath
-                self._events = []
-                self._gpu_events = []
-                self._start_ts = time.perf_counter_ns()
-                self._prev_sigint = signal.signal(signal.SIGINT, self._sigint_handler)
-                self._prev_sigterm = signal.signal(signal.SIGTERM, self._sigterm_handler)
-            self._session_count += 1
-            return
-        # Non-merge mode: original behaviour
         if self._active:
             self.end_session()
-        self._merge_mode = False
-        self._session_count = 1
+        self._merge_output = merge_output
         self._active = True
         self._filepath = filepath
         self._events = []
@@ -83,6 +101,8 @@ class Profiler:
         self._start_ts = time.perf_counter_ns()
         self._prev_sigint = signal.signal(signal.SIGINT, self._sigint_handler)
         self._prev_sigterm = signal.signal(signal.SIGTERM, self._sigterm_handler)
+        if merge_output is not None:
+            self._registry_register(filepath, merge_output)
         # Record a GPU reference event and pair it with the CPU wall-clock time
         # after synchronising, so GPU-event start times can be anchored to the
         # real GPU execution timeline instead of the CPU submission timeline.
@@ -98,15 +118,11 @@ class Profiler:
                 self._gpu_ref_event = ref
         except Exception as e:
             print(f"[profiler] GPU reference event setup failed: {e}")
-        print("starting session")
+        print(f"starting session for {filepath}")
 
     def end_session(self):
         if not self._active:
             return
-        if self._merge_mode:
-            self._session_count -= 1
-            if self._session_count > 0:
-                return
         import traceback
         is_main = threading.current_thread() is threading.main_thread()
         print(f"ending session for {self._filepath} (main_thread={is_main}, tid={threading.get_ident()})")
@@ -159,7 +175,7 @@ class Profiler:
             print(f"[profiler] signal restore failed: {e}")
             traceback.print_exc()
         print(f"[profiler] writing {len(self._events)} events to {self._filepath}")
-        trace = {"traceEvents": self._events}
+        trace = {"traceEvents": self._events, "start_ts_ns": self._start_ts}
         # Serialize to a string first, then write atomically with signals blocked
         # so an arriving SIGINT/SIGTERM can't truncate the file mid-write.
         try:
@@ -194,9 +210,21 @@ class Profiler:
                 pass
             return
         self._events = []
-        self._merge_mode = False
-        self._session_count = 0
         print(f"[profiler] wrote {self._filepath}")
+        if self._merge_output is not None:
+            merge_output = self._merge_output
+            self._merge_output = None
+            try:
+                is_last, all_files = self._registry_finish(self._filepath, merge_output)
+                if is_last:
+                    existing = [f for f in all_files if os.path.exists(f)]
+                    merge_traces(merge_output, *existing)
+                    try:
+                        os.unlink(merge_output + ".registry")
+                    except OSError:
+                        pass
+            except Exception as e:
+                print(f"[profiler] merge registry update failed: {e}")
 
     def add_gpu_event(self, name, category, wall_start_ns, cuda_start, cuda_end,
                       args=None, tids=None):
@@ -283,3 +311,50 @@ def profile_category(category):
                 return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def merge_traces(output_path, *input_paths):
+    """Merge multiple trace files into one, aligning timestamps across processes.
+
+    Each input file must have been written by this profiler (requires the
+    ``start_ts_ns`` metadata field).  Events are re-anchored so that t=0 in
+    the merged file corresponds to the earliest session start across all inputs.
+    """
+    traces = []
+    for path in input_paths:
+        with open(path) as f:
+            traces.append(json.load(f))
+
+    missing = [p for p, t in zip(input_paths, traces) if "start_ts_ns" not in t]
+    if missing:
+        raise ValueError(
+            f"The following files are missing start_ts_ns metadata and cannot "
+            f"be time-aligned: {missing}"
+        )
+
+    global_start_ns = min(t["start_ts_ns"] for t in traces)
+
+    merged_events = []
+    for path, trace in zip(input_paths, traces):
+        offset_us = (trace["start_ts_ns"] - global_start_ns) / 1000.0
+        for event in trace["traceEvents"]:
+            adjusted = dict(event)
+            adjusted["ts"] = event["ts"] + offset_us
+            merged_events.append(adjusted)
+
+    merged_events.sort(key=lambda e: e["ts"])
+
+    result = {"traceEvents": merged_events, "start_ts_ns": global_start_ns}
+    dirpath = os.path.dirname(os.path.abspath(output_path))
+    fd, tmp_path = tempfile.mkstemp(dir=dirpath, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(result, f)
+        os.replace(tmp_path, output_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    print(f"[profiler] merged {len(input_paths)} traces ({len(merged_events)} events) -> {output_path}")
