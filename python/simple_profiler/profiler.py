@@ -126,6 +126,16 @@ class Profiler:
         import traceback
         is_main = threading.current_thread() is threading.main_thread()
         print(f"ending session for {self._filepath} (main_thread={is_main}, tid={threading.get_ident()})")
+        # Ignore SIGTERM/SIGINT for the whole flush. On shutdown the caller may
+        # have reset them to SIG_DFL, and the parent SIGTERMs (never SIGKILLs)
+        # this child mid-flush, which would kill it before the atomic write
+        # lands. Restored to SIG_DFL once the file is written + merged below.
+        if is_main:
+            try:
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            except Exception as e:
+                print(f"[profiler] could not shield flush from signals: {e}")
         # Resolve deferred GPU events before deactivating, so add_event's
         # _active guard doesn't drop them.
         # Deduplicate by CUDA event identity in case the same event pair was
@@ -164,16 +174,11 @@ class Profiler:
                 print(f"[profiler] GPU event resolution failed: {e}")
         self._gpu_events = []
         self._active = False
-        try:
-            if self._prev_sigint is not None:
-                signal.signal(signal.SIGINT, self._prev_sigint)
-                self._prev_sigint = None
-            if self._prev_sigterm is not None:
-                signal.signal(signal.SIGTERM, self._prev_sigterm)
-                self._prev_sigterm = None
-        except Exception as e:
-            print(f"[profiler] signal restore failed: {e}")
-            traceback.print_exc()
+        # Don't restore the prior handlers here: during shutdown they're SIG_DFL,
+        # which would re-arm termination mid-flush. The shield above holds until
+        # after the merge.
+        self._prev_sigint = None
+        self._prev_sigterm = None
         print(f"[profiler] writing {len(self._events)} events to {self._filepath}")
         trace = {"traceEvents": self._events, "start_ts_ns": self._start_ts}
         # Serialize to a string first, then write atomically with signals blocked
@@ -225,6 +230,14 @@ class Profiler:
                         pass
             except Exception as e:
                 print(f"[profiler] merge registry update failed: {e}")
+        # Flush + merge done: restore default disposition so a stuck teardown
+        # (e.g. NCCL destroy_process_group) stays interruptible.
+        if is_main:
+            try:
+                signal.signal(signal.SIGINT, signal.SIG_DFL)
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            except Exception:
+                pass
 
     def add_gpu_event(self, name, category, wall_start_ns, cuda_start, cuda_end,
                       args=None, tids=None):

@@ -28,7 +28,7 @@ Zero-dependency Python profiler using decorators and context managers (does not 
 * Call `profiler.begin_session()` before profiling and `profiler.end_session()` after
 * Use `@profile` or `@profile_category("cat")` to trace functions
 * Use `with profile_scope("name", "cat"):` to trace code blocks
-* Run your code and load `results.json` into Perfetto UI
+* Run your code and load `results.json` into Perfetto UI, or open [python/index.html](python/index.html) for the built-in trace viewer with gap/range measurement tools
 
 ### Example
 

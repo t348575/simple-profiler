@@ -101,6 +101,22 @@
   #reset-btn:hover { border-color: var(--accent); color: var(--accent); }
   #reset-btn:disabled { opacity: 0.3; cursor: default; }
 
+  .toggle-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .toggle-control:hover { border-color: var(--accent); color: var(--accent); }
+  .toggle-control input { accent-color: var(--accent); }
+
   /* ---- Filter box ---- */
   .filter-wrap {
     position: relative;
@@ -156,6 +172,119 @@
   .fs-label { color: #aaa870; }
   .fs-val { color: #e8e070; font-family: 'Cascadia Code', 'Fira Code', monospace; }
   .fs-sep { color: #555530; }
+
+  /* ---- Search results table ---- */
+  #search-results {
+    flex-shrink: 0;
+    height: 0;
+    overflow: hidden;
+    background: #303030;
+    border-bottom: 1px solid var(--border);
+    transition: height 0.15s;
+  }
+  #search-results.visible { height: 190px; }
+  #search-results-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 28px;
+    padding: 0 16px;
+    border-bottom: 1px solid #474747;
+    font-size: 12px;
+  }
+  #search-results-title { color: var(--text-primary); font-weight: 600; }
+  #search-results-count { color: var(--text-secondary); }
+  #search-results-note { color: var(--text-dim); margin-left: auto; }
+  #search-results-scroll { height: calc(100% - 28px); overflow: auto; }
+  #search-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  #search-results-table th,
+  #search-results-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid #404040;
+    text-align: left;
+    white-space: nowrap;
+  }
+  #search-results-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #303030;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  #search-results-table tbody tr { cursor: pointer; }
+  #search-results-table tbody tr:hover { background: rgba(88, 166, 255, 0.12); }
+  #search-results-table tbody tr.selected { background: rgba(88, 166, 255, 0.22); }
+  .sr-name {
+    max-width: 520px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sr-mono { font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; color: var(--text-primary); }
+  .sr-dim { color: var(--text-secondary); }
+
+  /* ---- Measurement bar ---- */
+  #measure-bar {
+    flex-shrink: 0;
+    height: 0;
+    overflow: hidden;
+    background: #242f3a;
+    border-bottom: 1px solid #36506c;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    font-size: 12px;
+    transition: height 0.15s;
+  }
+  #measure-bar.visible { height: 34px; }
+  .measure-label { color: #8fb7dc; text-transform: uppercase; letter-spacing: 0.6px; }
+  .measure-input {
+    width: 112px;
+    padding: 4px 8px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid #45617d;
+    border-radius: 4px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+    outline: none;
+  }
+  .measure-input:focus { border-color: var(--accent); }
+  .measure-input.invalid { border-color: #ff5f56; color: #ff8a80; }
+  .measure-result {
+    color: #e8f3ff;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-weight: 600;
+    min-width: 170px;
+  }
+  .measure-hint { color: #7994ad; }
+  .measure-chip {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #bdd8f2;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+  }
+  .measure-btn, .measure-mini-btn {
+    background: transparent;
+    color: #bdd8f2;
+    border: 1px solid #45617d;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .measure-btn { padding: 4px 8px; font-size: 12px; }
+  .measure-mini-btn { padding: 3px 6px; font-size: 11px; }
+  .measure-btn:hover, .measure-mini-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .measure-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .measure-btn.active:hover { color: #000; }
+  .measure-actions { display: flex; flex-wrap: wrap; gap: 4px; max-width: 150px; }
 
   /* ---- Main content area ---- */
   #main {
@@ -249,6 +378,31 @@
     width: 100%;
     height: 100%;
   }
+
+  #vertical-scrollbar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    background: rgba(0, 0, 0, 0.18);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: default;
+  }
+  #vertical-scrollbar.hidden { display: none; }
+  #vertical-scrollbar-thumb {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    top: 0;
+    min-height: 24px;
+    border-radius: 8px;
+    background: #686868;
+    cursor: grab;
+  }
+  #vertical-scrollbar-thumb:hover,
+  #vertical-scrollbar-thumb.dragging { background: #858585; }
+  #vertical-scrollbar-thumb.dragging { cursor: grabbing; }
 
   /* ---- Minimap ---- */
   #minimap-row {
@@ -466,6 +620,10 @@
       <input id="filter-depth" class="filter-input" type="text" placeholder="Depth…" autocomplete="off" spellcheck="false">
       <button id="filter-depth-clear" class="filter-clear" title="Clear">&#215;</button>
     </div>
+    <label class="toggle-control" title="Force all packed tracks into one visible lane">
+      <input id="merge-toggle" type="checkbox">
+      <span>Merge</span>
+    </label>
     <button id="reset-btn" disabled>Reset Zoom</button>
     <button id="file-btn">Open Trace</button>
     <input type="file" id="file-input" accept=".json">
@@ -491,6 +649,44 @@
     <span id="fs-max" class="fs-val"></span>
   </div>
 
+  <div id="search-results">
+    <div id="search-results-header">
+      <span id="search-results-title">Search results</span>
+      <span id="search-results-count"></span>
+      <span id="search-results-note">Click a row to focus and zoom</span>
+    </div>
+    <div id="search-results-scroll">
+      <table id="search-results-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Start</th>
+            <th>Duration</th>
+            <th>Category</th>
+            <th>Track</th>
+            <th>Depth</th>
+            <th>Request</th>
+          </tr>
+        </thead>
+        <tbody id="search-results-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="measure-bar">
+    <span class="measure-label">Measure</span>
+    <button id="measure-mode-btn" class="measure-btn" title="Click two points anywhere on the timeline to measure between them">Click to mark</button>
+    <span>A</span>
+    <input id="measure-a-input" class="measure-input" type="text" placeholder="start (µs)">
+    <span>B</span>
+    <input id="measure-b-input" class="measure-input" type="text" placeholder="end (µs)">
+    <span id="measure-result" class="measure-result">Pick A and B</span>
+    <span id="measure-a-label" class="measure-chip"></span>
+    <span id="measure-b-label" class="measure-chip"></span>
+    <button id="measure-clear" class="measure-btn">Clear</button>
+    <span class="measure-hint">Click-to-mark: tap two points on the timeline. Or click a block + A/B start/end; manual inputs accept µs, ms, s.</span>
+  </div>
+
   <div id="main">
     <div id="ruler-row">
       <div id="ruler-label-spacer"></div>
@@ -510,6 +706,9 @@
           <small>Drag and drop or use the button above</small>
         </div>
         <canvas id="main-canvas"></canvas>
+        <div id="vertical-scrollbar" class="hidden">
+          <div id="vertical-scrollbar-thumb"></div>
+        </div>
       </div>
     </div>
 
@@ -551,6 +750,7 @@ const LANE_PADDING = 4;       // px between rows within a lane
 const ROW_HEIGHT   = 20;      // px per depth row
 const LANE_GAP     = 8;       // px gap between thread lanes
 const MIN_EVENT_W  = 1;       // minimum rendered width in px
+const TINY_HIT_PAD  = 2;       // extra click target around sub-pixel events
 const LABEL_WIDTH  = 160;     // must match CSS --label-width
 const RULER_HEIGHT = 32;
 const MINIMAP_H    = 64;
@@ -559,7 +759,8 @@ const MINIMAP_H    = 64;
 // State
 // ============================================================
 
-let traceData   = null;   // parsed & processed
+let rawTraceData = null;   // parsed input for reprocessing view modes
+let traceData    = null;   // parsed & processed
 let viewState   = {
   offsetUs:   0,          // left-edge time in us
   scaleX:     1,          // px per microsecond
@@ -569,12 +770,22 @@ let canvasRect = { left: 0, top: 0 };
 let mmRect     = { left: 0, top: 0 };
 let hoveredEvent  = null;
 let selectedEvent = null;
+let measureA = null;    // { time, label } in absolute trace µs
+let measureB = null;    // { time, label } in absolute trace µs
+let measureMode = false; // click-to-mark mode: plain clicks set A/B points
+let measureNext = 'a';   // which point the next click-to-mark places
+let measurePreviewTime = null; // cursor time for live guide line in measure mode
 let filterName  = '';   // event name filter (lowercase)
 let filterReqId = '';   // req_id filter (lowercase)
 let filterDepth = null; // depth filter (integer or null)
+let mergeTracks = false;
+let searchResultEvents = [];
 let isDragging    = false;
 let dragStartX    = 0;
 let dragStartOffset = 0;
+let scrollbarDragging = false;
+let scrollbarDragStartY = 0;
+let scrollbarDragStartScroll = 0;
 let minimapDragging = false;
 let minimapDragStartX = 0;
 let minimapDragStartOffset = 0;
@@ -591,6 +802,8 @@ const mainCanvas   = document.getElementById('main-canvas');
 const rulerCanvas  = document.getElementById('ruler-canvas');
 const minimapCanvas= document.getElementById('minimap-canvas');
 const canvasWrap   = document.getElementById('canvas-wrap');
+const verticalScrollbar = document.getElementById('vertical-scrollbar');
+const verticalScrollbarThumb = document.getElementById('vertical-scrollbar-thumb');
 const rulerWrap    = document.getElementById('ruler-canvas-wrap');
 const mmWrap       = document.getElementById('minimap-wrap');
 const labelsInner  = document.getElementById('thread-labels-inner');
@@ -611,6 +824,7 @@ const filterReqInput    = document.getElementById('filter-reqid');
 const filterReqClear    = document.getElementById('filter-reqid-clear');
 const filterDepthInput  = document.getElementById('filter-depth');
 const filterDepthClear  = document.getElementById('filter-depth-clear');
+const mergeToggle       = document.getElementById('merge-toggle');
 const filterStats      = document.getElementById('filter-stats');
 const fsMatches    = document.getElementById('fs-matches');
 const fsWall       = document.getElementById('fs-wall');
@@ -618,6 +832,17 @@ const fsTotal      = document.getElementById('fs-total');
 const fsAvg        = document.getElementById('fs-avg');
 const fsMin        = document.getElementById('fs-min');
 const fsMax        = document.getElementById('fs-max');
+const searchResults = document.getElementById('search-results');
+const searchResultsCount = document.getElementById('search-results-count');
+const searchResultsBody = document.getElementById('search-results-body');
+const measureBar   = document.getElementById('measure-bar');
+const measureAInput= document.getElementById('measure-a-input');
+const measureBInput= document.getElementById('measure-b-input');
+const measureResult= document.getElementById('measure-result');
+const measureALabel= document.getElementById('measure-a-label');
+const measureBLabel= document.getElementById('measure-b-label');
+const measureClear = document.getElementById('measure-clear');
+const measureModeBtn = document.getElementById('measure-mode-btn');
 
 const mCtx = mainCanvas.getContext('2d');
 const rCtx = rulerCanvas.getContext('2d');
@@ -761,12 +986,31 @@ function processTrace(raw) {
     }
   }
 
-  // Each track becomes one lane
-  for (let i = 0; i < tracks.length; i++) {
-    const { events: evts, maxDepth } = tracks[i];
-    assignColors(evts);
+  if (mergeTracks && tracks.length > 0) {
+    const mergedEvents = tracks.flatMap(track => track.events);
+    mergedEvents.sort((a, b) => a.ts - b.ts || b.dur - a.dur);
+
+    const rowEnds = [];
+    for (const e of mergedEvents) {
+      let placed = false;
+      for (let d = 0; d < rowEnds.length; d++) {
+        if (e.ts >= rowEnds[d]) { e.depth = d; rowEnds[d] = e.end; placed = true; break; }
+      }
+      if (!placed) { e.depth = rowEnds.length; rowEnds.push(e.end); }
+    }
+
+    assignColors(mergedEvents);
+    const maxDepth = Math.max(0, rowEnds.length - 1);
     const laneHeight = (maxDepth + 1) * (ROW_HEIGHT + LANE_PADDING) + LANE_GAP;
-    lanes.push({ tid: `track_${i}`, label: `Track ${i + 1}`, events: evts, maxDepth, height: laneHeight, idx: lanes.length });
+    lanes.push({ tid: 'merged_track', label: 'Merged Track', events: mergedEvents, maxDepth, height: laneHeight, idx: lanes.length });
+  } else {
+    // Each track becomes one lane
+    for (let i = 0; i < tracks.length; i++) {
+      const { events: evts, maxDepth } = tracks[i];
+      assignColors(evts);
+      const laneHeight = (maxDepth + 1) * (ROW_HEIGHT + LANE_PADDING) + LANE_GAP;
+      lanes.push({ tid: `track_${i}`, label: `Track ${i + 1}`, events: evts, maxDepth, height: laneHeight, idx: lanes.length });
+    }
   }
 
   // Compute y offsets
@@ -801,6 +1045,62 @@ function matchesFilter(evt) {
   return true;
 }
 
+function hasActiveSearch() {
+  return !!(filterName || filterReqId || filterDepth !== null);
+}
+
+function getFilteredEvents() {
+  if (!traceData || !hasActiveSearch()) return [];
+  return traceData.allEvents.filter(matchesFilter).sort((a, b) => a.ts - b.ts || b.dur - a.dur);
+}
+
+function eventRequestId(evt) {
+  return evt._reqId || evt._parentReqId || evt.args?.req_id || '';
+}
+
+function findEventLane(evt) {
+  if (!traceData) return null;
+  for (const lane of traceData.lanes) {
+    if (lane.events.includes(evt)) return lane;
+  }
+  return null;
+}
+
+function updateSearchResultsTable() {
+  searchResultEvents = getFilteredEvents();
+
+  if (!traceData || !hasActiveSearch()) {
+    searchResults.classList.remove('visible');
+    searchResultsBody.innerHTML = '';
+    searchResultsCount.textContent = '';
+    canvasRect = canvasWrap.getBoundingClientRect();
+    mmRect = mmWrap.getBoundingClientRect();
+    return;
+  }
+
+  searchResultsCount.textContent = `${searchResultEvents.length.toLocaleString()} events`;
+
+  searchResultsBody.innerHTML = searchResultEvents.map((evt, i) => {
+    const lane = findEventLane(evt);
+    const reqId = eventRequestId(evt);
+    const selected = evt === selectedEvent ? ' class="selected"' : '';
+    return `
+      <tr data-idx="${i}"${selected}>
+        <td class="sr-name" title="${escHtml(evt.name)}">${escHtml(evt.name)}</td>
+        <td class="sr-mono">${formatTime(evt.ts - traceData.globalMin)}</td>
+        <td class="sr-mono">${formatDuration(evt.dur)}</td>
+        <td class="sr-dim">${escHtml(evt.cat)}</td>
+        <td class="sr-dim">${escHtml(lane?.label || evt.tid)}</td>
+        <td class="sr-mono">${evt.depth}</td>
+        <td class="sr-dim">${escHtml(reqId || '-')}</td>
+      </tr>`;
+  }).join('');
+
+  searchResults.classList.add('visible');
+  canvasRect = canvasWrap.getBoundingClientRect();
+  mmRect = mmWrap.getBoundingClientRect();
+}
+
 function fmtDur(us) {
   if (us >= 1e6) return (us / 1e6).toFixed(2) + 's';
   if (us >= 1e3) return (us / 1e3).toFixed(1) + 'ms';
@@ -808,7 +1108,7 @@ function fmtDur(us) {
 }
 
 function updateFilterStats() {
-  const anyActive = filterName || filterReqId || filterDepth !== null;
+  const anyActive = hasActiveSearch();
   filterNameInput.classList.toggle('active', !!filterName);
   filterNameClear.classList.toggle('visible', !!filterName);
   filterReqInput.classList.toggle('active', !!filterReqId);
@@ -816,9 +1116,12 @@ function updateFilterStats() {
   filterDepthInput.classList.toggle('active', filterDepth !== null);
   filterDepthClear.classList.toggle('visible', filterDepth !== null);
 
+  updateSearchResultsTable();
+
   if (!anyActive || !traceData) {
     filterStats.classList.remove('visible');
     canvasRect = canvasWrap.getBoundingClientRect();
+    mmRect = mmWrap.getBoundingClientRect();
     return;
   }
 
@@ -867,6 +1170,7 @@ function updateFilterStats() {
   filterStats.classList.add('visible');
   // Re-cache canvas rect — filter bar shifts the canvas position
   canvasRect = canvasWrap.getBoundingClientRect();
+  mmRect = mmWrap.getBoundingClientRect();
 }
 
 // ============================================================
@@ -886,6 +1190,16 @@ function canvasHeight(){ return mainCanvas.height; }
 
 function laneRowY(lane, depth) {
   return lane.yOffset + LANE_GAP / 2 + depth * (ROW_HEIGHT + LANE_PADDING);
+}
+
+function eventPixelBounds(evt) {
+  const x = timeToX(evt.ts);
+  const naturalW = evt.dur * viewState.scaleX;
+  const visualW = Math.max(MIN_EVENT_W, naturalW);
+  if (visualW <= 2) {
+    return { x: Math.round(x), w: 1, tiny: true };
+  }
+  return { x, w: visualW, tiny: false };
 }
 
 // ============================================================
@@ -1009,6 +1323,170 @@ function formatDuration(us) {
   return us.toFixed(2) + 'µs';
 }
 
+function formatSignedDuration(us) {
+  return (us < 0 ? '-' : '') + formatDuration(Math.abs(us));
+}
+
+// ============================================================
+// Measurement helpers
+// ============================================================
+
+function parseTimeValue(raw) {
+  const s = String(raw || '').trim().toLowerCase().replace('µ', 'u');
+  if (!s) return null;
+  const m = s.match(/^(-?\d+(?:\.\d+)?)(?:\s*(us|ms|s))?$/);
+  if (!m) return null;
+  const value = parseFloat(m[1]);
+  const unit = m[2] || 'us';
+  if (unit === 's') return value * 1e6;
+  if (unit === 'ms') return value * 1e3;
+  return value;
+}
+
+function syncMeasureInputs() {
+  measureAInput.value = measureA ? formatDuration(measureA.time - traceData.globalMin) : '';
+  measureBInput.value = measureB ? formatDuration(measureB.time - traceData.globalMin) : '';
+  measureAInput.classList.remove('invalid');
+  measureBInput.classList.remove('invalid');
+}
+
+function setMeasurePoint(which, timeUs, label) {
+  if (!traceData) return;
+  const clamped = Math.max(traceData.globalMin, Math.min(traceData.globalMax, timeUs));
+  const point = { time: clamped, label };
+  if (which === 'a') measureA = point;
+  else measureB = point;
+  syncMeasureInputs();
+  updateMeasureBar();
+  invalidate();
+}
+
+function setMeasureFromEvent(which, evt, edge) {
+  const timeUs = edge === 'end' ? evt.end : evt.ts;
+  const rel = formatDuration(timeUs - traceData.globalMin);
+  setMeasurePoint(which, timeUs, `${which.toUpperCase()} ${edge} @ ${rel}: ${evt.name}`);
+}
+
+function commitMeasureInput(which) {
+  if (!traceData) return;
+  const input = which === 'a' ? measureAInput : measureBInput;
+  const relUs = parseTimeValue(input.value);
+  if (relUs === null) {
+    input.classList.add('invalid');
+    return;
+  }
+  input.classList.remove('invalid');
+  setMeasurePoint(which, traceData.globalMin + relUs, `${which.toUpperCase()} manual @ ${formatDuration(relUs)}`);
+}
+
+function clearMeasure() {
+  measureA = null;
+  measureB = null;
+  measureNext = 'a';
+  syncMeasureInputs();
+  updateMeasureBar();
+  invalidate();
+}
+
+// Place a measure point at an arbitrary clicked time (click-to-mark mode).
+// Cycles A → B → (fresh) A.
+function setMeasureFromClick(timeUs) {
+  if (!traceData) return;
+  const which = measureNext;
+  if (which === 'a') measureB = null; // starting a fresh pair
+  const rel = formatDuration(timeUs - traceData.globalMin);
+  setMeasurePoint(which, timeUs, `${which.toUpperCase()} @ ${rel}`);
+  measureNext = which === 'a' ? 'b' : 'a';
+}
+
+function setMeasureMode(on) {
+  measureMode = on;
+  measureModeBtn.classList.toggle('active', on);
+  if (on) measureNext = (measureA && !measureB) ? 'b' : 'a';
+  else measurePreviewTime = null;
+  canvasWrap.style.cursor = on ? 'crosshair' : 'default';
+  invalidate();
+}
+
+function updateMeasureBar() {
+  measureBar.classList.toggle('visible', !!traceData);
+  if (!traceData) return;
+
+  measureALabel.textContent = measureA ? measureA.label : '';
+  measureBLabel.textContent = measureB ? measureB.label : '';
+
+  if (measureA && measureB) {
+    const delta = measureB.time - measureA.time;
+    measureResult.textContent = `B - A = ${formatSignedDuration(delta)}`;
+    measureResult.title = `${delta.toFixed(3)} µs`;
+  } else if (measureA || measureB) {
+    measureResult.textContent = measureA ? 'Pick B' : 'Pick A';
+    measureResult.title = '';
+  } else {
+    measureResult.textContent = 'Pick A and B';
+    measureResult.title = '';
+  }
+
+  canvasRect = canvasWrap.getBoundingClientRect();
+  mmRect = mmWrap.getBoundingClientRect();
+}
+
+function drawMeasurementOverlay(ctx, w, h) {
+  if (!traceData) return;
+  if (!measureA && !measureB && !measureMode) return;
+
+  ctx.save();
+
+  // Live cursor guide line while in click-to-mark mode
+  if (measureMode && measurePreviewTime !== null) {
+    const px = timeToX(measurePreviewTime);
+    if (px >= -2 && px <= w + 2) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  if (measureA && measureB) {
+    const ax = timeToX(measureA.time);
+    const bx = timeToX(measureB.time);
+    const left = Math.max(0, Math.min(ax, bx));
+    const right = Math.min(w, Math.max(ax, bx));
+    if (right > 0 && left < w) {
+      ctx.fillStyle = 'rgba(88,166,255,0.10)';
+      ctx.fillRect(left, 0, Math.max(1, right - left), h);
+    }
+  }
+
+  const points = [
+    ['A', measureA, '#ffb300'],
+    ['B', measureB, '#58a6ff'],
+  ];
+  ctx.font = '600 11px Roboto, sans-serif';
+  ctx.textBaseline = 'top';
+  for (const [name, point, color] of points) {
+    if (!point) continue;
+    const x = timeToX(point.time);
+    if (x < -2 || x > w + 2) continue;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillText(name, Math.max(2, Math.min(w - 12, x + 4)), 4);
+  }
+  ctx.restore();
+}
+
 // ============================================================
 // Rendering: Main Canvas
 // ============================================================
@@ -1088,8 +1566,9 @@ function renderMain() {
 
     for (const evt of lane.events) {
       const naturalW = evt.dur * scaleX;
-      const x = timeToX(evt.ts);
-      const evtW = Math.max(MIN_EVENT_W, naturalW);
+      const bounds = eventPixelBounds(evt);
+      const x = bounds.x;
+      const evtW = bounds.w;
 
       // Cull off-screen
       if (x + evtW < 0 || x > w) continue;
@@ -1108,11 +1587,11 @@ function renderMain() {
 
       const y = laneTop + LANE_GAP / 2 + evt.depth * (ROW_HEIGHT + LANE_PADDING);
       const depthColor = evt.color;
-      mCtx.globalAlpha = ((filterName || filterReqId) && !matched) ? 0.1 : 1.0;
+      mCtx.globalAlpha = (hasActiveSearch() && !matched) ? 0.1 : 1.0;
 
-      if (evtW <= 2) {
+      if (bounds.tiny) {
         mCtx.fillStyle = depthColor;
-        mCtx.fillRect(Math.round(x), y, 1, ROW_HEIGHT);
+        mCtx.fillRect(x, y, evtW, ROW_HEIGHT);
       } else {
         mCtx.fillStyle = isSelected ? lighten(depthColor, 35) : isHovered ? lighten(depthColor, 20) : depthColor;
         roundRect(mCtx, x, y, evtW, ROW_HEIGHT, 2);
@@ -1144,6 +1623,7 @@ function renderMain() {
     }
   }
   mCtx.globalAlpha = 1.0;
+  drawMeasurementOverlay(mCtx, w, h);
 }
 
 // ============================================================
@@ -1245,6 +1725,30 @@ function setScrollTop(v) {
   if (!traceData) { scrollTopVal = 0; return; }
   const maxScroll = Math.max(0, traceData.totalHeight - canvasWrap.clientHeight);
   scrollTopVal = Math.max(0, Math.min(v, maxScroll));
+  updateVerticalScrollbar();
+}
+
+function updateVerticalScrollbar() {
+  if (!traceData) {
+    verticalScrollbar.classList.add('hidden');
+    return;
+  }
+
+  const viewportH = canvasWrap.clientHeight;
+  const totalH = traceData.totalHeight;
+  const maxScroll = Math.max(0, totalH - viewportH);
+  if (maxScroll <= 0 || viewportH <= 0) {
+    verticalScrollbar.classList.add('hidden');
+    return;
+  }
+
+  verticalScrollbar.classList.remove('hidden');
+  const trackH = verticalScrollbar.clientHeight;
+  const thumbH = Math.max(24, Math.round(trackH * viewportH / totalH));
+  const maxThumbTop = Math.max(0, trackH - thumbH);
+  const thumbTop = maxScroll ? Math.round((scrollTopVal / maxScroll) * maxThumbTop) : 0;
+  verticalScrollbarThumb.style.height = thumbH + 'px';
+  verticalScrollbarThumb.style.transform = `translateY(${thumbTop}px)`;
 }
 
 // ============================================================
@@ -1271,39 +1775,75 @@ function resetZoom() {
   invalidate();
 }
 
+function focusEvent(evt) {
+  if (!traceData || !evt) return;
+
+  const w = Math.max(1, canvasWrap.clientWidth);
+  const minVisibleUs = w / 1e6;
+  const desiredVisibleUs = Math.min(
+    traceData.totalDur,
+    Math.max(evt.dur * 3, 100, minVisibleUs)
+  );
+  viewState.scaleX = Math.max(minScale(), Math.min(w / desiredVisibleUs, 1e6));
+
+  const visibleUs = w / viewState.scaleX;
+  viewState.offsetUs = evt.ts - traceData.globalMin + evt.dur / 2 - visibleUs / 2;
+  clampOffset();
+
+  const lane = findEventLane(evt);
+  if (lane) {
+    const rowTop = lane.yOffset + LANE_GAP / 2 + evt.depth * (ROW_HEIGHT + LANE_PADDING);
+    setScrollTop(rowTop - canvasWrap.clientHeight / 2 + ROW_HEIGHT / 2);
+    updateThreadLabels();
+  }
+
+  showDetails(evt);
+  updateSearchResultsTable();
+  invalidate();
+}
+
 // ============================================================
 // Hit testing
 // ============================================================
 
 function hitTest(mx, my) {
   if (!traceData) return null;
-  const t = xToTime(mx);
+  const searchUntilTime = xToTime(mx + TINY_HIT_PAD + MIN_EVENT_W);
   const scrollTop = getScrollTop();
   const adjustedY = my + scrollTop;
 
   for (const lane of traceData.lanes) {
     if (adjustedY < lane.yOffset || adjustedY > lane.yOffset + lane.height) continue;
 
-    // Binary search to find the rightmost event with ts <= t
+    // Binary search to find the rightmost event whose minimum visual width can reach mx.
     const evts = lane.events;
     let lo = 0, hi = evts.length - 1, start = 0;
     while (lo <= hi) {
       const mid = (lo + hi) >>> 1;
-      if (evts[mid].ts <= t) { start = mid; lo = mid + 1; }
+      if (evts[mid].ts <= searchUntilTime) { start = mid; lo = mid + 1; }
       else hi = mid - 1;
     }
 
-    // Scan backwards from start to find all events that contain t.
-    // No early break — a large parent event starting far earlier can still span past t.
-    // Prefer the deepest (most nested) match so clicking selects the child, not the parent.
+    // Scan backwards from start to find all events whose rendered pixels contain mx.
+    // No early break: a large parent event starting far earlier can still span this point.
+    // Prefer the deepest match so clicking selects the child, not the parent.
     let best = null;
+    let bestDist = Infinity;
     for (let i = start; i >= 0; i--) {
       const evt = evts[i];
-      if (t < evt.ts || t > evt.end) continue;
+      const bounds = eventPixelBounds(evt);
+      const pad = bounds.tiny ? TINY_HIT_PAD : 0;
+      const left = bounds.x;
+      const right = bounds.x + bounds.w;
+      if (mx < left - pad || mx > right + pad) continue;
       const yTop = lane.yOffset + LANE_GAP / 2 + evt.depth * (ROW_HEIGHT + LANE_PADDING);
       const yBot = yTop + ROW_HEIGHT;
       if (adjustedY >= yTop && adjustedY <= yBot) {
-        if (!best || evt.depth > best.depth) best = evt;
+        const dist = mx < left ? left - mx : mx > right ? mx - right : 0;
+        if (!best || evt.depth > best.depth || (evt.depth === best.depth && dist < bestDist)) {
+          best = evt;
+          bestDist = dist;
+        }
       }
     }
     if (best) return best;
@@ -1382,6 +1922,15 @@ function showDetails(evt) {
       <label>End time</label>
       <div class="val">${formatTime(evt.end - traceData.globalMin)}</div>
     </div>
+    <div class="detail-group">
+      <label>Measure</label>
+      <div class="measure-actions">
+        <button class="measure-mini-btn" data-measure="a-start">A start</button>
+        <button class="measure-mini-btn" data-measure="a-end">A end</button>
+        <button class="measure-mini-btn" data-measure="b-start">B start</button>
+        <button class="measure-mini-btn" data-measure="b-end">B end</button>
+      </div>
+    </div>
   `;
 
   if (evt.args) {
@@ -1397,7 +1946,15 @@ function showDetails(evt) {
   }
 
   detailsInner.innerHTML = html;
+  detailsInner.querySelectorAll('[data-measure]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const [which, edge] = btn.dataset.measure.split('-');
+      setMeasureFromEvent(which, evt, edge);
+    });
+  });
   detailsPanel.classList.add('open');
+  updateSearchResultsTable();
   invalidate();
 }
 
@@ -1431,6 +1988,7 @@ function renderLoop() {
   dirty = false;
 
   updateThreadLabels();
+  updateVerticalScrollbar();
   renderRuler();
   renderMain();
   renderMinimap();
@@ -1489,6 +2047,43 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function updateTraceInfo() {
+  if (!traceData) {
+    traceInfo.textContent = '';
+    return;
+  }
+
+  const n = traceData.allEvents.length;
+  const dur = formatTime(traceData.totalDur);
+  const laneCount = traceData.lanes.length;
+  const laneLabel = laneCount === 1 ? 'track' : 'tracks';
+  traceInfo.textContent = `${n.toLocaleString()} events · ${dur} · ${laneCount} ${laneLabel}`;
+}
+
+function rebuildTraceData({ resetView = false } = {}) {
+  if (!rawTraceData) return;
+
+  traceData = processTrace(rawTraceData);
+  scrollTopVal = 0;
+  selectedEvent = null;
+  hoveredEvent = null;
+  clearMeasure();
+  labelsInner.innerHTML = '';
+  updateFilterStats();
+  detailsPanel.classList.remove('open');
+  minimapDirty = true;
+  minimapImageData = null;
+
+  if (resetView) resetZoom();
+  else {
+    clampOffset();
+    invalidate();
+  }
+
+  updateTraceInfo();
+  updateMeasureBar();
+}
+
 // ============================================================
 // File loading
 // ============================================================
@@ -1498,22 +2093,11 @@ function loadTrace(json) {
   try { raw = JSON.parse(json); }
   catch (e) { alert('Invalid JSON: ' + e.message); return; }
 
-  traceData = processTrace(raw);
-  scrollTopVal = 0;
-  selectedEvent = null;
-  hoveredEvent = null;
-  updateFilterStats();
-  detailsPanel.classList.remove('open');
-  minimapDirty = true;
-  minimapImageData = null;
+  rawTraceData = raw;
+  rebuildTraceData({ resetView: true });
 
   landing.classList.add('hidden');
   resetBtn.disabled = false;
-  resetZoom();
-
-  const n = traceData.allEvents.length;
-  const dur = formatTime(traceData.totalDur);
-  traceInfo.textContent = `${n.toLocaleString()} events · ${dur} · ${traceData.lanes.length} threads`;
 
   invalidate();
 }
@@ -1534,6 +2118,18 @@ fileInput.addEventListener('change', (e) => {
 
 resetBtn.addEventListener('click', resetZoom);
 detailsClose.addEventListener('click', hideDetails);
+
+searchResultsBody.addEventListener('click', (e) => {
+  const row = e.target.closest('tr[data-idx]');
+  if (!row) return;
+  const evt = searchResultEvents[Number(row.dataset.idx)];
+  focusEvent(evt);
+});
+
+mergeToggle.addEventListener('change', () => {
+  mergeTracks = mergeToggle.checked;
+  rebuildTraceData();
+});
 
 filterNameInput.addEventListener('input', () => {
   filterName = filterNameInput.value.trim().toLowerCase();
@@ -1572,6 +2168,41 @@ filterDepthClear.addEventListener('click', () => {
   updateFilterStats();
   invalidate();
   filterDepthInput.focus();
+});
+
+for (const [input, which] of [[measureAInput, 'a'], [measureBInput, 'b']]) {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') commitMeasureInput(which);
+  });
+  input.addEventListener('blur', () => {
+    if (input.value.trim()) commitMeasureInput(which);
+  });
+}
+measureClear.addEventListener('click', clearMeasure);
+measureModeBtn.addEventListener('click', () => setMeasureMode(!measureMode));
+
+verticalScrollbar.addEventListener('mousedown', (e) => {
+  if (!traceData || e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const rect = verticalScrollbar.getBoundingClientRect();
+  const thumbRect = verticalScrollbarThumb.getBoundingClientRect();
+  const maxScroll = Math.max(0, traceData.totalHeight - canvasWrap.clientHeight);
+  const maxThumbTop = Math.max(0, rect.height - thumbRect.height);
+
+  if (e.target === verticalScrollbarThumb) {
+    scrollbarDragging = true;
+    scrollbarDragStartY = e.clientY;
+    scrollbarDragStartScroll = scrollTopVal;
+    verticalScrollbarThumb.classList.add('dragging');
+    return;
+  }
+
+  const targetTop = e.clientY - rect.top - thumbRect.height / 2;
+  setScrollTop(maxThumbTop ? (targetTop / maxThumbTop) * maxScroll : 0);
+  updateThreadLabels();
+  invalidate();
 });
 
 // ============================================================
@@ -1662,6 +2293,18 @@ canvasWrap.addEventListener('mousedown', (e) => {
 });
 
 window.addEventListener('mousemove', (e) => {
+  if (scrollbarDragging) {
+    const trackH = verticalScrollbar.clientHeight;
+    const thumbH = verticalScrollbarThumb.getBoundingClientRect().height;
+    const maxThumbTop = Math.max(0, trackH - thumbH);
+    const maxScroll = Math.max(0, traceData.totalHeight - canvasWrap.clientHeight);
+    const scrollDelta = maxThumbTop ? ((e.clientY - scrollbarDragStartY) / maxThumbTop) * maxScroll : 0;
+    setScrollTop(scrollbarDragStartScroll + scrollDelta);
+    updateThreadLabels();
+    invalidate();
+    return;
+  }
+
   if (isDragging) {
     const dx = e.clientX - dragStartX;
     viewState.offsetUs = dragStartOffset - dx / viewState.scaleX;
@@ -1675,6 +2318,17 @@ window.addEventListener('mousemove', (e) => {
   const rect = canvasRect;
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
+
+  if (measureMode) {
+    measurePreviewTime = xToTime(mx);
+    canvasWrap.style.cursor = 'crosshair';
+    invalidate();
+    // Still show tooltip to help identify what's under the cursor
+    const hit = hitTest(mx, my);
+    if (hit) showTooltip(hit, e.clientX, e.clientY);
+    else hideTooltip();
+    return;
+  }
 
   const hit = hitTest(mx, my);
   if (hit !== hoveredEvent) {
@@ -1691,7 +2345,20 @@ window.addEventListener('mousemove', (e) => {
   }
 });
 
+canvasWrap.addEventListener('mouseleave', () => {
+  hideTooltip();
+  if (measureMode && measurePreviewTime !== null) {
+    measurePreviewTime = null;
+    invalidate();
+  }
+});
+
 window.addEventListener('mouseup', (e) => {
+  if (scrollbarDragging) {
+    scrollbarDragging = false;
+    verticalScrollbarThumb.classList.remove('dragging');
+  }
+
   if (isDragging) {
     const dx = Math.abs(e.clientX - dragStartX);
     isDragging = false;
@@ -1702,9 +2369,14 @@ window.addEventListener('mouseup', (e) => {
       const rect = canvasRect;
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      const hit = hitTest(mx, my);
-      if (hit) showDetails(hit);
-      else hideDetails();
+      if (measureMode) {
+        // Click-to-mark: place A/B at the exact clicked time, ignoring blocks
+        setMeasureFromClick(xToTime(mx));
+      } else {
+        const hit = hitTest(mx, my);
+        if (hit) showDetails(hit);
+        else hideDetails();
+      }
     }
   }
 
@@ -1714,10 +2386,16 @@ window.addEventListener('mouseup', (e) => {
 });
 
 
-// Keyboard shortcut: R to reset zoom
+// Keyboard shortcuts
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') resetZoom();
-  if (e.key === 'Escape') hideDetails();
+  if (e.key === 'Escape') { if (measureMode) setMeasureMode(false); else hideDetails(); }
+  if ((e.key === 'm' || e.key === 'M') && traceData && !(e.target instanceof HTMLInputElement)) setMeasureMode(!measureMode);
+  if (!selectedEvent || e.target instanceof HTMLInputElement) return;
+  if (e.key === 'a') setMeasureFromEvent('a', selectedEvent, 'start');
+  if (e.key === 'A') setMeasureFromEvent('a', selectedEvent, 'end');
+  if (e.key === 'b') setMeasureFromEvent('b', selectedEvent, 'start');
+  if (e.key === 'B') setMeasureFromEvent('b', selectedEvent, 'end');
 });
 
 // ============================================================
